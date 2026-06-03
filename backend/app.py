@@ -2,6 +2,8 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -11,8 +13,36 @@ from sqlalchemy.exc import SQLAlchemyError
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT_DIR / ".env"
+MODEL_PATH = ROOT_DIR / "models" / "enhanced_xgboost_model.joblib"
+ENHANCED_FEATURE_COLUMNS = [
+    "agency",
+    "complaint_type",
+    "borough",
+    "hour_of_day",
+    "day_of_week",
+    "month",
+    "weekend_flag",
+]
 
 app = FastAPI(title="NYC Civic ML API")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+class PredictionRequest(BaseModel):
+    agency: str
+    complaint_type: str
+    borough: str
+    day_of_week: str
+    month: int
+    hour_of_day: int
+    weekend_flag: bool
 
 
 def load_env_file() -> None:
@@ -56,9 +86,60 @@ def fetch_count_rows(query: str) -> list[dict]:
     return [dict(row._mapping) for row in rows]
 
 
+def load_prediction_artifact():
+    if not MODEL_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Model file not found: {MODEL_PATH}")
+
+    try:
+        import joblib
+
+        return joblib.load(MODEL_PATH)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to load model: {exc}") from exc
+
+
+def predict_resolution_category(payload: PredictionRequest) -> str:
+    artifact = load_prediction_artifact()
+    feature_row = {
+        "agency": payload.agency,
+        "complaint_type": payload.complaint_type,
+        "borough": payload.borough,
+        "hour_of_day": payload.hour_of_day,
+        "day_of_week": payload.day_of_week,
+        "month": payload.month,
+        "weekend_flag": payload.weekend_flag,
+    }
+
+    try:
+        if isinstance(artifact, dict):
+            model = artifact["model"]
+            encoder = artifact["encoder"]
+            label_encoder = artifact["label_encoder"]
+            feature_columns = artifact.get("feature_columns", ENHANCED_FEATURE_COLUMNS)
+            raw_features = [[str(feature_row[column]) for column in feature_columns]]
+            encoded_features = encoder.transform(raw_features)
+            prediction = model.predict(encoded_features)
+            return str(label_encoder.inverse_transform([int(prediction[0])])[0])
+
+        prediction = artifact.predict([feature_row])
+        return str(prediction[0])
+    except KeyError as exc:
+        raise HTTPException(status_code=500, detail=f"Model artifact missing key: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}") from exc
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.post("/predict")
+def predict(payload: PredictionRequest) -> dict:
+    return {
+        "predicted_category": predict_resolution_category(payload),
+        "model": "Enhanced XGBoost",
+    }
 
 
 @app.get("/analytics/categories")
