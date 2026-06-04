@@ -3,6 +3,8 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import joblib
+import pandas as pd
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -13,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 ENV_PATH = ROOT_DIR / ".env"
-MODEL_PATH = ROOT_DIR / "models" / "enhanced_xgboost_model.joblib"
+MODEL_PATH = ROOT_DIR / "models" / "enhanced_xgboost_pipeline.joblib"
 ENHANCED_FEATURE_COLUMNS = [
     "agency",
     "complaint_type",
@@ -23,6 +25,9 @@ ENHANCED_FEATURE_COLUMNS = [
     "month",
     "weekend_flag",
 ]
+
+prediction_artifact = None
+prediction_artifact_error: str | None = None
 
 app = FastAPI(title="NYC Civic ML API")
 
@@ -73,6 +78,23 @@ except RuntimeError:
     engine = None
 
 
+@app.on_event("startup")
+def load_prediction_artifact() -> None:
+    global prediction_artifact, prediction_artifact_error
+
+    if not MODEL_PATH.exists():
+        prediction_artifact = None
+        prediction_artifact_error = f"Model file not found: {MODEL_PATH}"
+        return
+
+    try:
+        prediction_artifact = joblib.load(MODEL_PATH)
+        prediction_artifact_error = None
+    except Exception as exc:
+        prediction_artifact = None
+        prediction_artifact_error = f"Failed to load model: {exc}"
+
+
 def fetch_count_rows(query: str) -> list[dict]:
     if engine is None:
         raise HTTPException(status_code=500, detail="Database is not configured.")
@@ -86,20 +108,11 @@ def fetch_count_rows(query: str) -> list[dict]:
     return [dict(row._mapping) for row in rows]
 
 
-def load_prediction_artifact():
-    if not MODEL_PATH.exists():
-        raise HTTPException(status_code=500, detail=f"Model file not found: {MODEL_PATH}")
-
-    try:
-        import joblib
-
-        return joblib.load(MODEL_PATH)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to load model: {exc}") from exc
-
-
 def predict_resolution_category(payload: PredictionRequest) -> str:
-    artifact = load_prediction_artifact()
+    if prediction_artifact is None:
+        detail = prediction_artifact_error or "Prediction model is not loaded."
+        raise HTTPException(status_code=500, detail=detail)
+
     feature_row = {
         "agency": payload.agency,
         "complaint_type": payload.complaint_type,
@@ -111,17 +124,22 @@ def predict_resolution_category(payload: PredictionRequest) -> str:
     }
 
     try:
-        if isinstance(artifact, dict):
-            model = artifact["model"]
-            encoder = artifact["encoder"]
-            label_encoder = artifact["label_encoder"]
-            feature_columns = artifact.get("feature_columns", ENHANCED_FEATURE_COLUMNS)
-            raw_features = [[str(feature_row[column]) for column in feature_columns]]
-            encoded_features = encoder.transform(raw_features)
-            prediction = model.predict(encoded_features)
+        if isinstance(prediction_artifact, dict):
+            feature_columns = prediction_artifact.get("feature_columns", ENHANCED_FEATURE_COLUMNS)
+            input_frame = pd.DataFrame([{column: feature_row[column] for column in feature_columns}])
+            label_encoder = prediction_artifact["label_encoder"]
+
+            if "pipeline" in prediction_artifact:
+                prediction = prediction_artifact["pipeline"].predict(input_frame.astype(str))
+            else:
+                model = prediction_artifact["model"]
+                encoder = prediction_artifact["encoder"]
+                encoded_features = encoder.transform(input_frame.astype(str))
+                prediction = model.predict(encoded_features)
+
             return str(label_encoder.inverse_transform([int(prediction[0])])[0])
 
-        prediction = artifact.predict([feature_row])
+        prediction = prediction_artifact.predict([feature_row])
         return str(prediction[0])
     except KeyError as exc:
         raise HTTPException(status_code=500, detail=f"Model artifact missing key: {exc}") from exc

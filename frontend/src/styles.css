@@ -117,6 +117,123 @@ h1 {
   gap: 18px;
 }
 
+.prediction-panel {
+  margin-bottom: 18px;
+}
+
+.prediction-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  padding: 18px;
+}
+
+.prediction-form label {
+  display: grid;
+  gap: 7px;
+  color: #526176;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.prediction-form input,
+.prediction-form select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #162033;
+  font-size: 0.94rem;
+  font-weight: 500;
+  text-transform: none;
+}
+
+.prediction-form input,
+.prediction-form select,
+.prediction-form button {
+  padding: 9px 11px;
+}
+
+.prediction-form input:focus,
+.prediction-form select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+  outline: none;
+}
+
+.checkbox-field {
+  align-content: end;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  min-height: 64px;
+}
+
+.checkbox-field input {
+  width: 18px;
+  min-height: 18px;
+  padding: 0;
+  accent-color: #2563eb;
+}
+
+.prediction-actions {
+  display: flex;
+  align-items: end;
+}
+
+.prediction-actions button {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #1d4ed8;
+  border-radius: 6px;
+  background: #2563eb;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 0.94rem;
+  font-weight: 800;
+}
+
+.prediction-actions button:disabled {
+  border-color: #94a3b8;
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.prediction-error,
+.prediction-result {
+  margin: 0 18px 18px;
+  padding: 13px 14px;
+  border-radius: 6px;
+}
+
+.prediction-error {
+  border: 1px solid #e0a3a3;
+  background: #fff1f1;
+  color: #8f1f1f;
+}
+
+.prediction-result {
+  border: 1px solid #badbcc;
+  background: #f0fdf4;
+}
+
+.prediction-result span {
+  display: block;
+  color: #47705a;
+  font-size: 0.82rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.prediction-result strong {
+  display: block;
+  margin-top: 5px;
+  color: #14532d;
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
 .panel {
   min-height: 320px;
   overflow: hidden;
@@ -210,7 +327,8 @@ th:last-child {
 
 @media (max-width: 900px) {
   .summary-grid,
-  .dashboard-grid {
+  .dashboard-grid,
+  .prediction-form {
     grid-template-columns: 1fr;
   }
 }

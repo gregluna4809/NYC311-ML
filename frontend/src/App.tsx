@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -24,6 +24,21 @@ type ChartRow = {
   count: number;
 };
 
+type PredictionFormState = {
+  agency: string;
+  complaint_type: string;
+  borough: string;
+  day_of_week: string;
+  month: number;
+  hour_of_day: number;
+  weekend_flag: boolean;
+};
+
+type PredictionResponse = {
+  predicted_category: string;
+  model: string;
+};
+
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 const endpoints = {
@@ -41,6 +56,17 @@ const initialData: AnalyticsState = {
 };
 
 const chartColors = ["#2563eb", "#059669", "#d97706", "#7c3aed", "#dc2626", "#0891b2", "#4f46e5", "#16a34a"];
+const dayOptions = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+const initialPredictionForm: PredictionFormState = {
+  agency: "NYPD",
+  complaint_type: "Illegal Parking",
+  borough: "BROOKLYN",
+  day_of_week: "Saturday",
+  month: 6,
+  hour_of_day: 14,
+  weekend_flag: true,
+};
 
 function getLabel(row: AnalyticsRow): string {
   const label = row.resolution_category ?? row.borough ?? row.agency ?? row.complaint_type ?? "Unknown";
@@ -66,11 +92,157 @@ function formatAxisLabel(label: string): string {
   return label.length > 22 ? `${label.slice(0, 19)}...` : label;
 }
 
+function getSelectOptions(rows: AnalyticsRow[], fallbackValue: string): string[] {
+  const options = rows.map(getLabel).filter((label) => label !== "Unknown");
+  return Array.from(new Set([fallbackValue, ...options])).sort((first, second) => first.localeCompare(second));
+}
+
 function SummaryCard({ label, value }: { label: string; value: string }) {
   return (
     <section className="summary-card">
       <span>{label}</span>
       <strong>{value}</strong>
+    </section>
+  );
+}
+
+function PredictionPanel({
+  agencyOptions,
+  boroughOptions,
+  complaintOptions,
+}: {
+  agencyOptions: string[];
+  boroughOptions: string[];
+  complaintOptions: string[];
+}) {
+  const [form, setForm] = useState<PredictionFormState>(initialPredictionForm);
+  const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
+  const [predicting, setPredicting] = useState(false);
+  const [predictionError, setPredictionError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPredicting(true);
+    setPrediction(null);
+    setPredictionError(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/predict`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(form),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        const detail = typeof errorBody?.detail === "string" ? errorBody.detail : `Prediction returned ${response.status}`;
+        throw new Error(detail);
+      }
+
+      setPrediction((await response.json()) as PredictionResponse);
+    } catch (submitError) {
+      setPredictionError(submitError instanceof Error ? submitError.message : "Unable to generate prediction.");
+    } finally {
+      setPredicting(false);
+    }
+  }
+
+  return (
+    <section className="panel prediction-panel">
+      <header className="panel-header">
+        <h2>Predict Resolution Category</h2>
+        <span>Enhanced XGBoost</span>
+      </header>
+      <form className="prediction-form" onSubmit={handleSubmit}>
+        <label>
+          Agency
+          <select value={form.agency} onChange={(event) => setForm({ ...form, agency: event.target.value })}>
+            {agencyOptions.map((agency) => (
+              <option key={agency} value={agency}>
+                {agency}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Complaint Type
+          <select
+            value={form.complaint_type}
+            onChange={(event) => setForm({ ...form, complaint_type: event.target.value })}
+          >
+            {complaintOptions.map((complaintType) => (
+              <option key={complaintType} value={complaintType}>
+                {complaintType}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Borough
+          <select value={form.borough} onChange={(event) => setForm({ ...form, borough: event.target.value })}>
+            {boroughOptions.map((borough) => (
+              <option key={borough} value={borough}>
+                {borough}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Day of Week
+          <select
+            value={form.day_of_week}
+            onChange={(event) => setForm({ ...form, day_of_week: event.target.value })}
+          >
+            {dayOptions.map((day) => (
+              <option key={day} value={day}>
+                {day}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Month
+          <input
+            type="number"
+            min="1"
+            max="12"
+            value={form.month}
+            onChange={(event) => setForm({ ...form, month: Number(event.target.value) })}
+          />
+        </label>
+        <label>
+          Hour of Day
+          <input
+            type="number"
+            min="0"
+            max="23"
+            value={form.hour_of_day}
+            onChange={(event) => setForm({ ...form, hour_of_day: Number(event.target.value) })}
+          />
+        </label>
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={form.weekend_flag}
+            onChange={(event) => setForm({ ...form, weekend_flag: event.target.checked })}
+          />
+          Weekend
+        </label>
+        <div className="prediction-actions">
+          <button type="submit" disabled={predicting}>
+            {predicting ? "Predicting" : "Predict"}
+          </button>
+        </div>
+      </form>
+      {predictionError ? <div className="prediction-error">Prediction failed: {predictionError}</div> : null}
+      {prediction ? (
+        <div className="prediction-result">
+          <span>Predicted Resolution Category</span>
+          <strong>{prediction.predicted_category}</strong>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -191,6 +363,12 @@ function App() {
     () => data.categories.reduce((total, row) => total + getCount(row), 0),
     [data.categories],
   );
+  const agencyOptions = useMemo(() => getSelectOptions(data.agencies, initialPredictionForm.agency), [data.agencies]);
+  const boroughOptions = useMemo(() => getSelectOptions(data.boroughs, initialPredictionForm.borough), [data.boroughs]);
+  const complaintOptions = useMemo(
+    () => getSelectOptions(data.topComplaints, initialPredictionForm.complaint_type),
+    [data.topComplaints],
+  );
 
   return (
     <main className="app-shell">
@@ -210,6 +388,12 @@ function App() {
         <SummaryCard label="Boroughs" value={data.boroughs.length.toLocaleString()} />
         <SummaryCard label="Agencies" value={data.agencies.length.toLocaleString()} />
       </section>
+
+      <PredictionPanel
+        agencyOptions={agencyOptions}
+        boroughOptions={boroughOptions}
+        complaintOptions={complaintOptions}
+      />
 
       <section className="dashboard-grid">
         <DataPanel title="Resolution category counts" rows={data.categories} />
