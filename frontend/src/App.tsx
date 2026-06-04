@@ -55,8 +55,14 @@ const initialData: AnalyticsState = {
   topComplaints: [],
 };
 
-const chartColors = ["#2563eb", "#059669", "#d97706", "#7c3aed", "#dc2626", "#0891b2", "#4f46e5", "#16a34a"];
+const chartColors = ["#14b8a6", "#f59e0b", "#38bdf8", "#a78bfa", "#fb7185", "#22c55e", "#f97316", "#06b6d4"];
 const dayOptions = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const modelPerformance = [
+  { label: "Majority Class Baseline", value: 44.3 },
+  { label: "Logistic Regression", value: 72.1 },
+  { label: "XGBoost", value: 72.9 },
+  { label: "Enhanced XGBoost", value: 74.4 },
+];
 
 const initialPredictionForm: PredictionFormState = {
   agency: "NYPD",
@@ -102,6 +108,30 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
     <section className="summary-card">
       <span>{label}</span>
       <strong>{value}</strong>
+    </section>
+  );
+}
+
+function ModelPerformancePanel() {
+  return (
+    <section className="panel model-panel">
+      <header className="panel-header">
+        <h2>Model Performance</h2>
+        <span>Validation accuracy</span>
+      </header>
+      <div className="model-list">
+        {modelPerformance.map((model) => (
+          <div className="model-row" key={model.label}>
+            <div className="model-row-top">
+              <span>{model.label}</span>
+              <strong>{model.value.toFixed(1)}%</strong>
+            </div>
+            <div className="model-track" aria-hidden="true">
+              <div className="model-fill" style={{ width: `${model.value}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -153,7 +183,7 @@ function PredictionPanel({
     <section className="panel prediction-panel">
       <header className="panel-header">
         <h2>Predict Resolution Category</h2>
-        <span>Enhanced XGBoost</span>
+        <span>Live FastAPI model</span>
       </header>
       <form className="prediction-form" onSubmit={handleSubmit}>
         <label>
@@ -262,30 +292,32 @@ function DataPanel({ title, rows }: { title: string; rows: AnalyticsRow[] }) {
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} layout="vertical" margin={{ top: 6, right: 18, bottom: 6, left: 8 }}>
-              <CartesianGrid stroke="#e7edf4" strokeDasharray="3 3" horizontal={false} />
+              <CartesianGrid stroke="rgba(148, 163, 184, 0.14)" strokeDasharray="3 3" horizontal={false} />
               <XAxis
                 type="number"
-                tick={{ fill: "#657287", fontSize: 12 }}
+                tick={{ fill: "#8ea3b8", fontSize: 12 }}
                 tickLine={false}
-                axisLine={{ stroke: "#d9e0e8" }}
+                axisLine={{ stroke: "rgba(148, 163, 184, 0.2)" }}
               />
               <YAxis
                 type="category"
                 dataKey="label"
                 width={132}
-                tick={{ fill: "#334155", fontSize: 12 }}
+                tick={{ fill: "#d5e0ea", fontSize: 12 }}
                 tickFormatter={formatAxisLabel}
                 tickLine={false}
                 axisLine={false}
               />
               <Tooltip
-                cursor={{ fill: "rgba(37, 99, 235, 0.08)" }}
+                cursor={{ fill: "rgba(20, 184, 166, 0.1)" }}
                 formatter={(value) => [Number(value).toLocaleString(), "Count"]}
-                labelStyle={{ color: "#101827", fontWeight: 700 }}
+                labelStyle={{ color: "#f8fafc", fontWeight: 700 }}
                 contentStyle={{
-                  border: "1px solid #d9e0e8",
+                  background: "#111c2d",
+                  border: "1px solid rgba(20, 184, 166, 0.35)",
                   borderRadius: 6,
-                  boxShadow: "0 8px 24px rgba(16, 24, 39, 0.12)",
+                  boxShadow: "0 16px 36px rgba(0, 0, 0, 0.32)",
+                  color: "#cbd5e1",
                 }}
               />
               <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={18}>
@@ -376,6 +408,17 @@ function App() {
         <div>
           <p className="eyebrow">NYC 311 Analytics</p>
           <h1>Civic Service Request Dashboard</h1>
+          <p className="dashboard-intro">
+            This dashboard analyzes NYC 311 service requests using real NYC Open Data. It shows how complaints are
+            distributed across agencies, boroughs, and resolution categories, and uses a trained XGBoost model to predict
+            how long a new complaint is likely to take to resolve.
+          </p>
+          <div className="workflow-row" aria-label="How it works">
+            <span>NYC Open Data</span>
+            <span>PostgreSQL</span>
+            <span>FastAPI</span>
+            <span>XGBoost Prediction</span>
+          </div>
         </div>
         <span className={loading ? "status loading" : "status"}>{loading ? "Loading" : "Live data"}</span>
       </header>
@@ -394,6 +437,8 @@ function App() {
         boroughOptions={boroughOptions}
         complaintOptions={complaintOptions}
       />
+
+      <ModelPerformancePanel />
 
       <section className="dashboard-grid">
         <DataPanel title="Resolution category counts" rows={data.categories} />
