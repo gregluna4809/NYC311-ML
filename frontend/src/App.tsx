@@ -1,4 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 type AnalyticsRow = Record<string, string | number | null>;
 
@@ -7,6 +17,11 @@ type AnalyticsState = {
   boroughs: AnalyticsRow[];
   agencies: AnalyticsRow[];
   topComplaints: AnalyticsRow[];
+};
+
+type ChartRow = {
+  label: string;
+  count: number;
 };
 
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -25,6 +40,8 @@ const initialData: AnalyticsState = {
   topComplaints: [],
 };
 
+const chartColors = ["#2563eb", "#059669", "#d97706", "#7c3aed", "#dc2626", "#0891b2", "#4f46e5", "#16a34a"];
+
 function getLabel(row: AnalyticsRow): string {
   const label = row.resolution_category ?? row.borough ?? row.agency ?? row.complaint_type ?? "Unknown";
   return String(label);
@@ -33,6 +50,20 @@ function getLabel(row: AnalyticsRow): string {
 function getCount(row: AnalyticsRow): number {
   const value = row.count ?? row.complaint_count ?? 0;
   return Number(value);
+}
+
+function getChartData(rows: AnalyticsRow[]): ChartRow[] {
+  return rows
+    .map((row) => ({
+      label: getLabel(row),
+      count: getCount(row),
+    }))
+    .sort((first, second) => second.count - first.count)
+    .slice(0, 10);
+}
+
+function formatAxisLabel(label: string): string {
+  return label.length > 22 ? `${label.slice(0, 19)}...` : label;
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {
@@ -45,12 +76,55 @@ function SummaryCard({ label, value }: { label: string; value: string }) {
 }
 
 function DataPanel({ title, rows }: { title: string; rows: AnalyticsRow[] }) {
+  const chartData = getChartData(rows);
+
   return (
     <section className="panel">
       <header className="panel-header">
         <h2>{title}</h2>
         <span>{rows.length} rows</span>
       </header>
+      <div className="chart-wrap" aria-label={`${title} bar chart`}>
+        {chartData.length === 0 ? (
+          <div className="chart-empty">No chart data available</div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} layout="vertical" margin={{ top: 6, right: 18, bottom: 6, left: 8 }}>
+              <CartesianGrid stroke="#e7edf4" strokeDasharray="3 3" horizontal={false} />
+              <XAxis
+                type="number"
+                tick={{ fill: "#657287", fontSize: 12 }}
+                tickLine={false}
+                axisLine={{ stroke: "#d9e0e8" }}
+              />
+              <YAxis
+                type="category"
+                dataKey="label"
+                width={132}
+                tick={{ fill: "#334155", fontSize: 12 }}
+                tickFormatter={formatAxisLabel}
+                tickLine={false}
+                axisLine={false}
+              />
+              <Tooltip
+                cursor={{ fill: "rgba(37, 99, 235, 0.08)" }}
+                formatter={(value) => [Number(value).toLocaleString(), "Count"]}
+                labelStyle={{ color: "#101827", fontWeight: 700 }}
+                contentStyle={{
+                  border: "1px solid #d9e0e8",
+                  borderRadius: 6,
+                  boxShadow: "0 8px 24px rgba(16, 24, 39, 0.12)",
+                }}
+              />
+              <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={18}>
+                {chartData.map((entry, index) => (
+                  <Cell key={`${entry.label}-${index}`} fill={chartColors[index % chartColors.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
       <div className="table-wrap">
         <table>
           <thead>
