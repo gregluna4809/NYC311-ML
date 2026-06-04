@@ -1,1 +1,10 @@
-# Project dependencies will be added as the implementation is defined.
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+sqlalchemy==2.0.50
+psycopg2-binary==2.9.9
+pandas==3.0.2
+joblib==1.5.3
+scikit-learn==1.5.2
+xgboost==3.2.0
+numpy==2.2.6
+scipy==1.14.1

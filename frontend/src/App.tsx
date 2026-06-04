@@ -36,7 +36,13 @@ type PredictionFormState = {
 
 type PredictionResponse = {
   predicted_category: string;
+  confidence: number;
   model: string;
+};
+
+type ComplaintTypeMetadata = {
+  complaint_type: string;
+  agencies: string[];
 };
 
 const API_BASE_URL = "http://127.0.0.1:8000";
@@ -47,6 +53,7 @@ const endpoints = {
   agencies: `${API_BASE_URL}/analytics/agencies`,
   topComplaints: `${API_BASE_URL}/analytics/top-complaints`,
 };
+const complaintTypeMetadataEndpoint = `${API_BASE_URL}/metadata/complaint-types`;
 
 const initialData: AnalyticsState = {
   categories: [],
@@ -55,7 +62,7 @@ const initialData: AnalyticsState = {
   topComplaints: [],
 };
 
-const chartColors = ["#14b8a6", "#f59e0b", "#38bdf8", "#a78bfa", "#fb7185", "#22c55e", "#f97316", "#06b6d4"];
+const chartColors = ["#005ea8", "#111111", "#6b7280", "#8ecae6", "#f9a825", "#4b5563", "#0072bc", "#9ca3af"];
 const dayOptions = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const modelPerformance = [
   { label: "Majority Class Baseline", value: 44.3 },
@@ -65,8 +72,8 @@ const modelPerformance = [
 ];
 
 const initialPredictionForm: PredictionFormState = {
-  agency: "NYPD",
-  complaint_type: "Illegal Parking",
+  agency: "",
+  complaint_type: "",
   borough: "BROOKLYN",
   day_of_week: "Saturday",
   month: 6,
@@ -137,21 +144,67 @@ function ModelPerformancePanel() {
 }
 
 function PredictionPanel({
-  agencyOptions,
   boroughOptions,
-  complaintOptions,
+  complaintTypeMetadata,
+  metadataLoading,
 }: {
-  agencyOptions: string[];
   boroughOptions: string[];
-  complaintOptions: string[];
+  complaintTypeMetadata: ComplaintTypeMetadata[];
+  metadataLoading: boolean;
 }) {
   const [form, setForm] = useState<PredictionFormState>(initialPredictionForm);
   const [prediction, setPrediction] = useState<PredictionResponse | null>(null);
   const [predicting, setPredicting] = useState(false);
   const [predictionError, setPredictionError] = useState<string | null>(null);
+  const complaintOptions = useMemo(
+    () => complaintTypeMetadata.map((metadata) => metadata.complaint_type),
+    [complaintTypeMetadata],
+  );
+  const selectedComplaintMetadata = useMemo(
+    () => complaintTypeMetadata.find((metadata) => metadata.complaint_type === form.complaint_type),
+    [complaintTypeMetadata, form.complaint_type],
+  );
+  const agencyOptions = selectedComplaintMetadata?.agencies ?? [];
+  const canPredict = Boolean(form.complaint_type && form.agency && form.borough) && !metadataLoading;
+
+  useEffect(() => {
+    if (complaintTypeMetadata.length === 0) {
+      return;
+    }
+
+    setForm((currentForm) => {
+      const currentComplaintMetadata = complaintTypeMetadata.find(
+        (metadata) => metadata.complaint_type === currentForm.complaint_type,
+      );
+      const nextComplaintMetadata = currentComplaintMetadata ?? complaintTypeMetadata[0];
+      const currentAgencyIsValid = nextComplaintMetadata.agencies.includes(currentForm.agency);
+
+      return {
+        ...currentForm,
+        complaint_type: nextComplaintMetadata.complaint_type,
+        agency: currentAgencyIsValid ? currentForm.agency : nextComplaintMetadata.agencies[0] ?? "",
+      };
+    });
+  }, [complaintTypeMetadata]);
+
+  function updateComplaintType(complaintType: string) {
+    const nextComplaintMetadata = complaintTypeMetadata.find((metadata) => metadata.complaint_type === complaintType);
+    setForm({
+      ...form,
+      complaint_type: complaintType,
+      agency: nextComplaintMetadata?.agencies[0] ?? "",
+    });
+    setPrediction(null);
+    setPredictionError(null);
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canPredict) {
+      setPredictionError("Select a valid complaint type and agency before predicting.");
+      return;
+    }
+
     setPredicting(true);
     setPrediction(null);
     setPredictionError(null);
@@ -188,7 +241,11 @@ function PredictionPanel({
       <form className="prediction-form" onSubmit={handleSubmit}>
         <label>
           Agency
-          <select value={form.agency} onChange={(event) => setForm({ ...form, agency: event.target.value })}>
+          <select
+            value={form.agency}
+            disabled={agencyOptions.length === 0}
+            onChange={(event) => setForm({ ...form, agency: event.target.value })}
+          >
             {agencyOptions.map((agency) => (
               <option key={agency} value={agency}>
                 {agency}
@@ -200,7 +257,8 @@ function PredictionPanel({
           Complaint Type
           <select
             value={form.complaint_type}
-            onChange={(event) => setForm({ ...form, complaint_type: event.target.value })}
+            disabled={complaintOptions.length === 0}
+            onChange={(event) => updateComplaintType(event.target.value)}
           >
             {complaintOptions.map((complaintType) => (
               <option key={complaintType} value={complaintType}>
@@ -261,8 +319,8 @@ function PredictionPanel({
           Weekend
         </label>
         <div className="prediction-actions">
-          <button type="submit" disabled={predicting}>
-            {predicting ? "Predicting" : "Predict"}
+          <button type="submit" disabled={predicting || !canPredict}>
+            {predicting ? "Predicting" : metadataLoading ? "Loading options" : "Predict"}
           </button>
         </div>
       </form>
@@ -271,6 +329,18 @@ function PredictionPanel({
         <div className="prediction-result">
           <span>Predicted Resolution Category</span>
           <strong>{prediction.predicted_category}</strong>
+          <div className="confidence-block">
+            <div className="confidence-label">
+              <span>Confidence</span>
+              <strong>{Math.round(prediction.confidence * 100)}%</strong>
+            </div>
+            <div className="confidence-track" aria-hidden="true">
+              <div
+                className="confidence-fill"
+                style={{ width: `${Math.min(Math.max(prediction.confidence, 0), 1) * 100}%` }}
+              />
+            </div>
+          </div>
         </div>
       ) : null}
     </section>
@@ -292,32 +362,32 @@ function DataPanel({ title, rows }: { title: string; rows: AnalyticsRow[] }) {
         ) : (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} layout="vertical" margin={{ top: 6, right: 18, bottom: 6, left: 8 }}>
-              <CartesianGrid stroke="rgba(148, 163, 184, 0.14)" strokeDasharray="3 3" horizontal={false} />
+              <CartesianGrid stroke="#d6e4f0" strokeDasharray="3 3" horizontal={false} />
               <XAxis
                 type="number"
-                tick={{ fill: "#8ea3b8", fontSize: 12 }}
+                tick={{ fill: "#4b5563", fontSize: 12 }}
                 tickLine={false}
-                axisLine={{ stroke: "rgba(148, 163, 184, 0.2)" }}
+                axisLine={{ stroke: "#bfd3e6" }}
               />
               <YAxis
                 type="category"
                 dataKey="label"
                 width={132}
-                tick={{ fill: "#d5e0ea", fontSize: 12 }}
+                tick={{ fill: "#111827", fontSize: 12 }}
                 tickFormatter={formatAxisLabel}
                 tickLine={false}
                 axisLine={false}
               />
               <Tooltip
-                cursor={{ fill: "rgba(20, 184, 166, 0.1)" }}
+                cursor={{ fill: "rgba(0, 94, 168, 0.08)" }}
                 formatter={(value) => [Number(value).toLocaleString(), "Count"]}
-                labelStyle={{ color: "#f8fafc", fontWeight: 700 }}
+                labelStyle={{ color: "#111111", fontWeight: 700 }}
                 contentStyle={{
-                  background: "#111c2d",
-                  border: "1px solid rgba(20, 184, 166, 0.35)",
-                  borderRadius: 6,
-                  boxShadow: "0 16px 36px rgba(0, 0, 0, 0.32)",
-                  color: "#cbd5e1",
+                  background: "#ffffff",
+                  border: "1px solid #bfd3e6",
+                  borderRadius: 8,
+                  boxShadow: "0 12px 28px rgba(17, 24, 39, 0.14)",
+                  color: "#374151",
                 }}
               />
               <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={18}>
@@ -359,6 +429,9 @@ function DataPanel({ title, rows }: { title: string; rows: AnalyticsRow[] }) {
 
 function App() {
   const [data, setData] = useState<AnalyticsState>(initialData);
+  const [complaintTypeMetadata, setComplaintTypeMetadata] = useState<ComplaintTypeMetadata[]>([]);
+  const [metadataLoading, setMetadataLoading] = useState(true);
+  const [metadataError, setMetadataError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -391,16 +464,29 @@ function App() {
     loadAnalytics();
   }, []);
 
+  useEffect(() => {
+    async function loadComplaintTypeMetadata() {
+      try {
+        const response = await fetch(complaintTypeMetadataEndpoint);
+        if (!response.ok) {
+          throw new Error(`${complaintTypeMetadataEndpoint} returned ${response.status}`);
+        }
+        setComplaintTypeMetadata((await response.json()) as ComplaintTypeMetadata[]);
+      } catch (loadError) {
+        setMetadataError(loadError instanceof Error ? loadError.message : "Unable to load complaint type metadata.");
+      } finally {
+        setMetadataLoading(false);
+      }
+    }
+
+    loadComplaintTypeMetadata();
+  }, []);
+
   const totalComplaints = useMemo(
     () => data.categories.reduce((total, row) => total + getCount(row), 0),
     [data.categories],
   );
-  const agencyOptions = useMemo(() => getSelectOptions(data.agencies, initialPredictionForm.agency), [data.agencies]);
   const boroughOptions = useMemo(() => getSelectOptions(data.boroughs, initialPredictionForm.borough), [data.boroughs]);
-  const complaintOptions = useMemo(
-    () => getSelectOptions(data.topComplaints, initialPredictionForm.complaint_type),
-    [data.topComplaints],
-  );
 
   return (
     <main className="app-shell">
@@ -424,6 +510,7 @@ function App() {
       </header>
 
       {error ? <div className="error-banner">Failed to load analytics: {error}</div> : null}
+      {metadataError ? <div className="error-banner">Failed to load prediction options: {metadataError}</div> : null}
 
       <section className="summary-grid">
         <SummaryCard label="Total complaints" value={totalComplaints.toLocaleString()} />
@@ -433,9 +520,9 @@ function App() {
       </section>
 
       <PredictionPanel
-        agencyOptions={agencyOptions}
         boroughOptions={boroughOptions}
-        complaintOptions={complaintOptions}
+        complaintTypeMetadata={complaintTypeMetadata}
+        metadataLoading={metadataLoading}
       />
 
       <ModelPerformancePanel />
@@ -446,6 +533,10 @@ function App() {
         <DataPanel title="Agency counts" rows={data.agencies} />
         <DataPanel title="Top complaint types" rows={data.topComplaints} />
       </section>
+
+      <footer className="site-footer">
+        NYC311-ML • Portfolio Project • Uses NYC Open Data • Not affiliated with or endorsed by the City of New York
+      </footer>
     </main>
   );
 }

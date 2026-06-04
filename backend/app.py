@@ -108,7 +108,44 @@ def fetch_count_rows(query: str) -> list[dict]:
     return [dict(row._mapping) for row in rows]
 
 
-def predict_resolution_category(payload: PredictionRequest) -> str:
+def fetch_complaint_type_metadata() -> list[dict]:
+    if engine is None:
+        raise HTTPException(status_code=500, detail="Database is not configured.")
+
+    try:
+        with engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT DISTINCT complaint_type, agency
+                    FROM complaints_clean
+                    ORDER BY complaint_type, agency;
+                    """
+                )
+            ).fetchall()
+    except SQLAlchemyError as exc:
+        raise HTTPException(status_code=500, detail=f"Database query failed: {exc}") from exc
+
+    grouped_complaints: dict[str, list[str]] = {}
+    for row in rows:
+        complaint_type = row._mapping["complaint_type"]
+        agency = row._mapping["agency"]
+        if complaint_type is None or agency is None:
+            continue
+        grouped_complaints.setdefault(str(complaint_type), []).append(str(agency))
+
+    return [
+        {"complaint_type": complaint_type, "agencies": agencies}
+        for complaint_type, agencies in grouped_complaints.items()
+    ]
+
+
+def get_predicted_class_confidence(probabilities, predicted_class) -> float:
+    class_probabilities = probabilities[0]
+    return float(class_probabilities[int(predicted_class)])
+
+
+def predict_resolution_category(payload: PredictionRequest) -> dict:
     if prediction_artifact is None:
         detail = prediction_artifact_error or "Prediction model is not loaded."
         raise HTTPException(status_code=500, detail=detail)
@@ -130,19 +167,38 @@ def predict_resolution_category(payload: PredictionRequest) -> str:
             label_encoder = prediction_artifact["label_encoder"]
 
             if "pipeline" in prediction_artifact:
-                prediction = prediction_artifact["pipeline"].predict(input_frame.astype(str))
+                pipeline = prediction_artifact["pipeline"]
+                prediction = pipeline.predict(input_frame.astype(str))
+                probabilities = pipeline.predict_proba(input_frame.astype(str))
             else:
                 model = prediction_artifact["model"]
                 encoder = prediction_artifact["encoder"]
                 encoded_features = encoder.transform(input_frame.astype(str))
                 prediction = model.predict(encoded_features)
+                probabilities = model.predict_proba(encoded_features)
 
-            return str(label_encoder.inverse_transform([int(prediction[0])])[0])
+            predicted_class = int(prediction[0])
+            return {
+                "predicted_category": str(label_encoder.inverse_transform([predicted_class])[0]),
+                "confidence": get_predicted_class_confidence(probabilities, predicted_class),
+            }
 
         prediction = prediction_artifact.predict([feature_row])
-        return str(prediction[0])
+        probabilities = prediction_artifact.predict_proba([feature_row])
+        predicted_class = prediction[0]
+        classes = list(getattr(prediction_artifact, "classes_", []))
+        if predicted_class in classes:
+            confidence = float(probabilities[0][classes.index(predicted_class)])
+        else:
+            confidence = float(max(probabilities[0]))
+        return {
+            "predicted_category": str(predicted_class),
+            "confidence": confidence,
+        }
     except KeyError as exc:
         raise HTTPException(status_code=500, detail=f"Model artifact missing key: {exc}") from exc
+    except AttributeError as exc:
+        raise HTTPException(status_code=500, detail=f"Prediction model does not support confidence scores: {exc}") from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}") from exc
 
@@ -154,10 +210,17 @@ def health() -> dict:
 
 @app.post("/predict")
 def predict(payload: PredictionRequest) -> dict:
+    prediction = predict_resolution_category(payload)
     return {
-        "predicted_category": predict_resolution_category(payload),
+        "predicted_category": prediction["predicted_category"],
+        "confidence": prediction["confidence"],
         "model": "Enhanced XGBoost",
     }
+
+
+@app.get("/metadata/complaint-types")
+def complaint_type_metadata() -> list[dict]:
+    return fetch_complaint_type_metadata()
 
 
 @app.get("/analytics/categories")
