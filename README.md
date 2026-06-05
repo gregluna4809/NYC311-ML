@@ -1,5 +1,11 @@
 # NYC311-ML
 
+## Live Demo
+
+[http://nyc311.pulse-forge.com:8080](http://nyc311.pulse-forge.com:8080)
+
+---
+
 ## Overview
 
 NYC311-ML is a full-stack analytics and machine learning project built using real NYC Open Data.
@@ -288,7 +294,7 @@ Potential future enhancements include:
 * Geospatial mapping
 * Historical trend analysis
 * Time-series forecasting
-* Cloud deployment
+* ~~Cloud deployment~~ (deployed to DigitalOcean)
 * Additional machine learning features
 
 ---
