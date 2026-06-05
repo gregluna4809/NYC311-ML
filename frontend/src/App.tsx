@@ -45,7 +45,7 @@ type ComplaintTypeMetadata = {
   agencies: string[];
 };
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = "http://nyc311.pulse-forge.com:8001";
 
 const endpoints = {
   categories: `${API_BASE_URL}/analytics/categories`,
