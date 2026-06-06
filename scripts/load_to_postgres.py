@@ -103,6 +103,13 @@ def upsert_records(engine, rows: list[dict]) -> tuple[int, int]:
     return inserted_rows, updated_rows
 
 
+def truncate_complaints_clean(engine) -> None:
+    with engine.begin() as connection:
+        connection.execute(text("TRUNCATE TABLE complaints_clean;"))
+
+    print("Wiped complaints_clean before loading new records.")
+
+
 def main() -> None:
     database_url = get_database_url()
     records = load_records()
@@ -111,6 +118,7 @@ def main() -> None:
     try:
         engine = create_engine(database_url)
         metadata.create_all(engine, tables=[complaints_clean])
+        truncate_complaints_clean(engine)
         inserted_rows, updated_rows = upsert_records(engine, rows)
     except SQLAlchemyError as exc:
         raise SystemExit(f"Database operation failed: {exc}") from exc

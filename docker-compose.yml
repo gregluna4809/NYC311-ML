@@ -27,6 +27,7 @@ services:
     entrypoint: []
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-nyc311}:${POSTGRES_PASSWORD:-nyc311_password}@postgres:5432/${POSTGRES_DB:-nyc311_ml}
+      NYC_OPENDATA_APP_TOKEN: ${NYC_OPENDATA_APP_TOKEN:-}
     command: >
       sh -c "
         python scripts/download_sample.py &&
