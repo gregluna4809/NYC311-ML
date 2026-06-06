@@ -68,6 +68,8 @@ def main() -> None:
         cleaned_records.append(cleaned_record)
         category_counts[cleaned_record["resolution_category"]] += 1
 
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     with OUTPUT_PATH.open("w", encoding="utf-8") as output_file:
         json.dump(cleaned_records, output_file, indent=2)
 
@@ -80,4 +82,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import sys
+        print(f"[dataloader] FAILED: {e}", file=sys.stderr)
+        sys.exit(1)

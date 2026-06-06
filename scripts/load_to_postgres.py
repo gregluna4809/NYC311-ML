@@ -121,4 +121,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        import sys
+        print(f"[dataloader] FAILED: {e}", file=sys.stderr)
+        sys.exit(1)
