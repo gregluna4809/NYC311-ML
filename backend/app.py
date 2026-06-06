@@ -33,7 +33,13 @@ app = FastAPI(title="NYC Civic ML API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://nyc311.pulse-forge.com:8080"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://nyc311.pulse-forge.com:8080",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -268,5 +274,36 @@ def analytics_top_complaints() -> list[dict]:
         GROUP BY complaint_type
         ORDER BY count DESC
         LIMIT 10;
+        """
+    )
+
+
+@app.get("/analytics/trends/volume")
+def analytics_trends_volume() -> list[dict]:
+    return fetch_count_rows(
+        """
+        SELECT
+            TO_CHAR(DATE_TRUNC('month', created_date), 'YYYY-MM') AS month,
+            COUNT(*) AS count
+        FROM complaints_clean
+        WHERE created_date IS NOT NULL
+        GROUP BY DATE_TRUNC('month', created_date)
+        ORDER BY DATE_TRUNC('month', created_date);
+        """
+    )
+
+
+@app.get("/analytics/trends/resolution")
+def analytics_trends_resolution() -> list[dict]:
+    return fetch_count_rows(
+        """
+        SELECT
+            TO_CHAR(DATE_TRUNC('month', created_date), 'YYYY-MM') AS month,
+            ROUND(AVG(resolution_hours)::numeric, 2) AS average_resolution_hours
+        FROM complaints_clean
+        WHERE created_date IS NOT NULL
+            AND resolution_hours IS NOT NULL
+        GROUP BY DATE_TRUNC('month', created_date)
+        ORDER BY DATE_TRUNC('month', created_date);
         """
     )

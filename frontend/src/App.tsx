@@ -4,6 +4,8 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -17,11 +19,18 @@ type AnalyticsState = {
   boroughs: AnalyticsRow[];
   agencies: AnalyticsRow[];
   topComplaints: AnalyticsRow[];
+  volumeTrend: AnalyticsRow[];
+  resolutionTrend: AnalyticsRow[];
 };
 
 type ChartRow = {
   label: string;
   count: number;
+};
+
+type TrendChartRow = {
+  month: string;
+  value: number;
 };
 
 type PredictionFormState = {
@@ -45,13 +54,17 @@ type ComplaintTypeMetadata = {
   agencies: string[];
 };
 
-const API_BASE_URL = "http://nyc311.pulse-forge.com:8001";
+const API_BASE_URL =
+  (import.meta as ImportMeta & { env: { VITE_API_BASE_URL?: string } }).env.VITE_API_BASE_URL ??
+  "http://localhost:8001";
 
 const endpoints = {
   categories: `${API_BASE_URL}/analytics/categories`,
   boroughs: `${API_BASE_URL}/analytics/boroughs`,
   agencies: `${API_BASE_URL}/analytics/agencies`,
   topComplaints: `${API_BASE_URL}/analytics/top-complaints`,
+  volumeTrend: `${API_BASE_URL}/analytics/trends/volume`,
+  resolutionTrend: `${API_BASE_URL}/analytics/trends/resolution`,
 };
 const complaintTypeMetadataEndpoint = `${API_BASE_URL}/metadata/complaint-types`;
 
@@ -60,6 +73,8 @@ const initialData: AnalyticsState = {
   boroughs: [],
   agencies: [],
   topComplaints: [],
+  volumeTrend: [],
+  resolutionTrend: [],
 };
 
 const chartColors = ["#005ea8", "#111111", "#6b7280", "#8ecae6", "#f9a825", "#4b5563", "#0072bc", "#9ca3af"];
@@ -99,6 +114,13 @@ function getChartData(rows: AnalyticsRow[]): ChartRow[] {
     }))
     .sort((first, second) => second.count - first.count)
     .slice(0, 10);
+}
+
+function getTrendChartData(rows: AnalyticsRow[], valueKey: "count" | "average_resolution_hours"): TrendChartRow[] {
+  return rows.map((row) => ({
+    month: String(row.month ?? "Unknown"),
+    value: Number(row[valueKey] ?? 0),
+  }));
 }
 
 function formatAxisLabel(label: string): string {
@@ -427,6 +449,96 @@ function DataPanel({ title, rows }: { title: string; rows: AnalyticsRow[] }) {
   );
 }
 
+function TrendPanel({
+  title,
+  subtitle,
+  rows,
+  valueKey,
+  valueLabel,
+}: {
+  title: string;
+  subtitle?: string;
+  rows: AnalyticsRow[];
+  valueKey: "count" | "average_resolution_hours";
+  valueLabel: string;
+}) {
+  const chartData = getTrendChartData(rows, valueKey);
+
+  return (
+    <section className="panel">
+      <header className="panel-header">
+        <h2>{title}</h2>
+        <span>{subtitle ?? `${rows.length} months`}</span>
+      </header>
+      <div className="chart-wrap" aria-label={`${title} line chart`}>
+        {chartData.length === 0 ? (
+          <div className="chart-empty">No chart data available</div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ top: 12, right: 18, bottom: 6, left: 8 }}>
+              <CartesianGrid stroke="#d6e4f0" strokeDasharray="3 3" />
+              <XAxis
+                dataKey="month"
+                tick={{ fill: "#4b5563", fontSize: 12 }}
+                tickLine={false}
+                axisLine={{ stroke: "#bfd3e6" }}
+              />
+              <YAxis
+                tick={{ fill: "#4b5563", fontSize: 12 }}
+                tickLine={false}
+                axisLine={{ stroke: "#bfd3e6" }}
+              />
+              <Tooltip
+                formatter={(value) => [Number(value).toLocaleString(), valueLabel]}
+                labelStyle={{ color: "#111111", fontWeight: 700 }}
+                contentStyle={{
+                  background: "#ffffff",
+                  border: "1px solid #bfd3e6",
+                  borderRadius: 8,
+                  boxShadow: "0 12px 28px rgba(17, 24, 39, 0.14)",
+                  color: "#374151",
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="#005ea8"
+                strokeWidth={3}
+                dot={{ fill: "#ffffff", stroke: "#005ea8", strokeWidth: 2, r: 4 }}
+                activeDot={{ fill: "#005ea8", stroke: "#ffffff", strokeWidth: 2, r: 6 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>{valueLabel}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr>
+                <td colSpan={2}>No data available</td>
+              </tr>
+            ) : (
+              rows.map((row, index) => (
+                <tr key={`${row.month ?? "Unknown"}-${index}`}>
+                  <td>{String(row.month ?? "Unknown")}</td>
+                  <td>{Number(row[valueKey] ?? 0).toLocaleString()}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function App() {
   const [data, setData] = useState<AnalyticsState>(initialData);
   const [complaintTypeMetadata, setComplaintTypeMetadata] = useState<ComplaintTypeMetadata[]>([]);
@@ -453,6 +565,8 @@ function App() {
           boroughs: responses[1],
           agencies: responses[2],
           topComplaints: responses[3],
+          volumeTrend: responses[4],
+          resolutionTrend: responses[5],
         });
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Unable to load analytics.");
@@ -532,6 +646,19 @@ function App() {
         <DataPanel title="Borough counts" rows={data.boroughs} />
         <DataPanel title="Agency counts" rows={data.agencies} />
         <DataPanel title="Top complaint types" rows={data.topComplaints} />
+        <TrendPanel
+          title="Monthly sampled complaint volume"
+          subtitle="Capped daily sample, not complete volume"
+          rows={data.volumeTrend}
+          valueKey="count"
+          valueLabel="Complaints"
+        />
+        <TrendPanel
+          title="Monthly average resolution time"
+          rows={data.resolutionTrend}
+          valueKey="average_resolution_hours"
+          valueLabel="Avg hours"
+        />
       </section>
 
       <footer className="site-footer">
