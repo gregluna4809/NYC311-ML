@@ -2,7 +2,7 @@
 
 ## Live Demo
 
-[http://nyc311.pulse-forge.com:8080](http://nyc311.pulse-forge.com:8080)
+[https://nyc311.pulse-forge.com](https://nyc311.pulse-forge.com)
 
 ---
 
@@ -201,6 +201,8 @@ Data is downloaded from NYC Open Data, cleaned and transformed using Python, loa
 
 Machine learning predictions are served through the same API layer.
 
+In production, the app sits behind a Caddy reverse proxy that handles HTTPS. The frontend is served at the main domain, and API traffic goes to the backend under `/api`.
+
 ---
 
 ## Technology Stack
@@ -234,36 +236,37 @@ Machine learning predictions are served through the same API layer.
 
 ## Running Locally
 
-### Backend
+From a fresh clone, make sure the frontend has a local environment file:
 
-```bash
-uvicorn backend.app:app --reload
+```ini
+# frontend/.env
+VITE_API_BASE_URL=http://localhost:8001
 ```
 
-### Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### API Documentation
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-### Dashboard
-
-```text
-http://localhost:5173
-```
-
-### Docker
+Then run the full stack with Docker Compose:
 
 ```bash
 docker compose up --build
+```
+
+The base Compose file is shaped for production, where Caddy connects to the app on the external `edge` network. For local development, `docker-compose.override.yml` is picked up automatically and publishes the ports you need.
+
+The dashboard will be available at:
+
+```text
+http://localhost:8080
+```
+
+The backend API will be available at:
+
+```text
+http://localhost:8001
+```
+
+FastAPI docs will be available at:
+
+```text
+http://localhost:8001/docs
 ```
 
 ---
