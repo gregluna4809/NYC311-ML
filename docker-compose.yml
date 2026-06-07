@@ -7,10 +7,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-nyc311_ml}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-nyc311} -d ${POSTGRES_DB:-nyc311_ml}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -45,8 +43,11 @@ services:
     depends_on:
       dataloader:
         condition: service_completed_successfully
-    ports:
-      - "8001:8000"
+    expose:
+      - "8000"
+    networks:
+      - default
+      - edge
 
   frontend:
     build:
@@ -54,8 +55,15 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - backend
-    ports:
-      - "8080:80"
+    expose:
+      - "80"
+    networks:
+      - default
+      - edge
 
 volumes:
   postgres_data:
+
+networks:
+  edge:
+    external: true
