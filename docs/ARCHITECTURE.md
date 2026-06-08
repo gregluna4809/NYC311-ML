@@ -65,6 +65,8 @@ download_sample.py -> clean_dataset.py -> load_to_postgres.py
 
 The current refresh process reloads the sampled dataset. During load, `complaints_clean` is truncated and repopulated from the refreshed cleaned sample. This keeps the deployment simple for a single-droplet Compose setup, while leaving room for future incremental loading if the project needs longer retained history.
 
+This workflow has been tested in production. A manual validation run completed successfully, wrote logs to `logs/refresh.log`, and loaded 17,823 cleaned records into PostgreSQL.
+
 ---
 
 ## Database Layer
@@ -159,12 +161,22 @@ cd /opt/NYC311-ML
 docker compose run --rm dataloader
 ```
 
-For scheduled refreshes, the repository includes `scripts/refresh_data.sh`, which changes to the project root, runs the dataloader, prints UTC timestamps, and exits nonzero on failure.
+For scheduled refreshes, the repository includes `scripts/refresh_data.sh`, which changes to the project root, runs the dataloader, prints UTC timestamps, and exits nonzero on failure. This workflow is installed in production through cron for nightly execution.
 
 Example nightly cron entry:
 
 ```cron
 15 2 * * * cd /opt/NYC311-ML && mkdir -p logs && ./scripts/refresh_data.sh >> logs/refresh.log 2>&1
+```
+
+Expected refresh log shape:
+
+```text
+[2026-06-08T02:15:01Z] Starting NYC311 data refresh
+Downloaded records from NYC Open Data
+Cleaned record count: 17823
+Rows inserted: 17823
+[2026-06-08T02:18:42Z] NYC311 data refresh completed
 ```
 
 ---

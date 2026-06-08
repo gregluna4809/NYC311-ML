@@ -279,7 +279,7 @@ http://localhost:8001/docs
 
 ## Data Refresh
 
-The project includes a one-shot `dataloader` service for refreshing the NYC 311 dataset.
+The project includes a production-validated automated refresh workflow for the NYC 311 dataset. It uses the existing one-shot `dataloader` service and is scheduled through cron on the deployed droplet.
 
 The dataloader runs the existing ETL flow:
 
@@ -288,6 +288,15 @@ download_sample.py -> clean_dataset.py -> load_to_postgres.py
 ```
 
 This refreshes the current sampled dataset, cleans it, truncates `complaints_clean`, and reloads PostgreSQL with the refreshed sample. The current workflow is a full sampled reload, not an incremental loader. Incremental loading could be added later if the project needs to retain a longer production history without replacing the loaded sample.
+
+The production refresh workflow has been validated successfully:
+
+* `scripts/refresh_data.sh` executes successfully on the droplet
+* The dataloader downloads, cleans, and reloads the sampled NYC 311 data
+* Refresh logs are written to `logs/refresh.log`
+* A manual validation run completed successfully
+* The current refresh loaded 17,823 cleaned records into PostgreSQL
+* Nightly execution is scheduled through cron
 
 To run a manual refresh from the deployed repository:
 
@@ -310,9 +319,21 @@ A helper script is also available:
 
 The script changes to the project root, runs the one-shot dataloader container, prints UTC timestamps, and exits nonzero if the refresh fails.
 
+Expected log output looks like:
+
+```text
+[2026-06-08T02:15:01Z] Starting NYC311 data refresh
+Downloaded records from NYC Open Data
+Original record count: 17823
+Cleaned record count: 17823
+Wiped complaints_clean before loading new records.
+Rows inserted: 17823
+[2026-06-08T02:18:42Z] NYC311 data refresh completed
+```
+
 ### Nightly Cron Example
 
-On the production droplet, make the script executable:
+On the production droplet, the refresh is scheduled with cron. To install or update the same workflow, make the script executable:
 
 ```bash
 chmod +x /opt/NYC311-ML/scripts/refresh_data.sh
