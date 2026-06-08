@@ -36,6 +36,8 @@ The FastAPI backend reads from PostgreSQL and exposes analytics endpoints that t
 
 Machine learning predictions are generated using a trained XGBoost model that is loaded when the API starts.
 
+Historical trend analytics are served from the same API layer. Monthly complaint-volume and average resolution-time endpoints aggregate PostgreSQL records by `created_date` month for the frontend dashboard.
+
 ---
 
 ## Data Pipeline
@@ -81,6 +83,7 @@ It provides endpoints for:
 
 * Health checks
 * Analytics
+* Historical trend analytics
 * Metadata
 * Machine learning predictions
 
@@ -98,12 +101,15 @@ It provides:
 
 * Analytics dashboard
 * Charts
+* Historical trend visualizations
 * Summary statistics
 * Prediction interface
 
 All displayed data comes from the FastAPI backend.
 
 No analytics are hardcoded into the UI.
+
+The dashboard uses Recharts for bar charts and monthly line charts, including sampled complaint volume over time and average resolution hours by month.
 
 ---
 
@@ -134,8 +140,9 @@ The deployment stack includes:
 * Frontend container
 * Backend container
 * PostgreSQL container
+* Caddy reverse proxy for HTTPS routing in production
 
-Docker Compose is used to run the complete application locally and provides a straightforward path to cloud deployment.
+Docker Compose is used to run the complete application locally and in the deployed environment.
 
 ---
 
@@ -146,7 +153,6 @@ There are several directions this project could grow:
 * Automated data refresh jobs
 * Geospatial analysis and mapping
 * Time-series forecasting
-* Managed cloud deployment
 * User authentication
 * Additional machine learning features
 

@@ -1,5 +1,19 @@
 # NYC Civic ML Frontend
 
+The frontend is a React, TypeScript, and Vite dashboard for NYC311-ML.
+
+It displays:
+
+* Summary statistics for complaints, resolution categories, boroughs, and agencies
+* Resolution category, borough, agency, and top complaint-type charts
+* Historical trend visualizations using Recharts
+* Monthly sampled complaint-volume trends
+* Monthly average resolution-time trends
+* Machine learning model performance comparisons
+* A prediction form backed by the FastAPI `/predict` endpoint
+
+All dashboard data is loaded from the FastAPI backend. Analytics and trend data are not hardcoded in the frontend.
+
 ## Environment
 
 Local development uses `frontend/.env`:

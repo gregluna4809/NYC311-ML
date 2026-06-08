@@ -51,7 +51,7 @@ The dashboard allows users to:
 
 * Explore NYC 311 complaint activity
 * Analyze complaint distributions across agencies and boroughs
-* View resolution category trends
+* View historical complaint-volume and resolution-time trends
 * Compare machine learning model performance
 * Generate resolution predictions for new complaints
 
@@ -102,11 +102,15 @@ The dashboard includes:
 * Borough-level complaint analysis
 * Agency-level complaint analysis
 * Top complaint types
+* Monthly sampled complaint-volume trend analysis
+* Monthly average resolution-time trend analysis
 * Machine learning model comparisons
 
 All analytics are generated from live PostgreSQL data through the FastAPI backend.
 
 No dashboard data is hardcoded.
+
+Historical trend analysis is implemented in the dashboard using Recharts line charts. The trend panels show monthly sampled complaint volume and monthly average resolution time from backend analytics endpoints.
 
 ---
 
@@ -159,6 +163,8 @@ GET /analytics/categories
 GET /analytics/boroughs
 GET /analytics/agencies
 GET /analytics/top-complaints
+GET /analytics/trends/volume
+GET /analytics/trends/resolution
 ```
 
 ### Metadata
@@ -295,7 +301,6 @@ Potential future enhancements include:
 
 * Automated data refresh jobs
 * Geospatial mapping
-* Historical trend analysis
 * Time-series forecasting
 * ~~Cloud deployment~~ (deployed to DigitalOcean)
 * Additional machine learning features
