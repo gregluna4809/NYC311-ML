@@ -57,6 +57,14 @@ The cleaned dataset is then loaded into PostgreSQL.
 
 This allows both SQL analysis and machine learning workflows to use the same source of truth.
 
+The Docker Compose `dataloader` service runs this ETL flow as a one-shot container:
+
+```text
+download_sample.py -> clean_dataset.py -> load_to_postgres.py
+```
+
+The current refresh process reloads the sampled dataset. During load, `complaints_clean` is truncated and repopulated from the refreshed cleaned sample. This keeps the deployment simple for a single-droplet Compose setup, while leaving room for future incremental loading if the project needs longer retained history.
+
 ---
 
 ## Database Layer
@@ -144,13 +152,28 @@ The deployment stack includes:
 
 Docker Compose is used to run the complete application locally and in the deployed environment.
 
+The data refresh path also uses Docker Compose. In production, a manual refresh can be run from the deployed repository:
+
+```bash
+cd /opt/NYC311-ML
+docker compose run --rm dataloader
+```
+
+For scheduled refreshes, the repository includes `scripts/refresh_data.sh`, which changes to the project root, runs the dataloader, prints UTC timestamps, and exits nonzero on failure.
+
+Example nightly cron entry:
+
+```cron
+15 2 * * * cd /opt/NYC311-ML && mkdir -p logs && ./scripts/refresh_data.sh >> logs/refresh.log 2>&1
+```
+
 ---
 
 ## Future Improvements
 
 There are several directions this project could grow:
 
-* Automated data refresh jobs
+* Incremental data loading
 * Geospatial analysis and mapping
 * Time-series forecasting
 * User authentication

@@ -277,6 +277,63 @@ http://localhost:8001/docs
 
 ---
 
+## Data Refresh
+
+The project includes a one-shot `dataloader` service for refreshing the NYC 311 dataset.
+
+The dataloader runs the existing ETL flow:
+
+```text
+download_sample.py -> clean_dataset.py -> load_to_postgres.py
+```
+
+This refreshes the current sampled dataset, cleans it, truncates `complaints_clean`, and reloads PostgreSQL with the refreshed sample. The current workflow is a full sampled reload, not an incremental loader. Incremental loading could be added later if the project needs to retain a longer production history without replacing the loaded sample.
+
+To run a manual refresh from the deployed repository:
+
+```bash
+cd /opt/NYC311-ML
+docker compose run --rm dataloader
+```
+
+The same command can be run locally from the project root:
+
+```bash
+docker compose run --rm dataloader
+```
+
+A helper script is also available:
+
+```bash
+./scripts/refresh_data.sh
+```
+
+The script changes to the project root, runs the one-shot dataloader container, prints UTC timestamps, and exits nonzero if the refresh fails.
+
+### Nightly Cron Example
+
+On the production droplet, make the script executable:
+
+```bash
+chmod +x /opt/NYC311-ML/scripts/refresh_data.sh
+```
+
+Then edit the deploy user's crontab:
+
+```bash
+crontab -e
+```
+
+Example nightly refresh at 2:15 AM server time:
+
+```cron
+15 2 * * * cd /opt/NYC311-ML && mkdir -p logs && ./scripts/refresh_data.sh >> logs/refresh.log 2>&1
+```
+
+This cron entry changes into the deployed repository, runs the same one-shot dataloader refresh, and appends output to `logs/refresh.log`.
+
+---
+
 ## What I Learned
 
 One thing this project reinforced is that machine learning is only one part of the process.
@@ -299,7 +356,6 @@ Building the application around the model was where most of the work happened.
 
 Potential future enhancements include:
 
-* Automated data refresh jobs
 * Geospatial mapping
 * Time-series forecasting
 * ~~Cloud deployment~~ (deployed to DigitalOcean)
